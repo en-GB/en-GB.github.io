@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="utf-8">
-<meta HTTP-EQUIV='Content-Security-Policy' CONTENT="script-src 'self' 'unsafe-inline';">
+<meta http-equiv='Content-Security-Policy' content="script-src 'self' 'unsafe-inline';">
 <title>test three.js</title>
 <style> body { margin: 0; } </style>
 </head>
@@ -307,7 +307,6 @@ const background = []; {
 		background.push(px/(1<<31), py/(1<<31), sqrt(i*3+10)+1, 0,1,0);
 		background.push(px/(1<<31), py/(1<<31), sqrt(i*3+10)+2, 0,0,1);
 	}
-	print(background);
 	gl.bindBuffer(gl.ARRAY_BUFFER, back_buf);
 	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(background), gl.STREAM_DRAW);
 }
@@ -688,27 +687,25 @@ function show(str) {
 // projects point to screen
 function pro(v) {
 	return scale2(8/(8-z(v)), v)
-	// return v;
+	return v;
 }
 
 function planeSide(normal, offset) {
 	return z(normal) * 8 < offset;
-	// return z(normal) < 0;
+	return z(normal) < 0;
 }
 
 function turnInput(v) {
 	const direction = pro(qrot(faceTangent(faceOf(head), travel), ROTATION));
 	const sideways = det2(v, direction);
 	const forwards = dot2(v, direction);
-	// const skip = abs(sideways)*2 < abs(forwards);
 	const skip = false;
-	// show(`${v[0]} ${v[1]} ${sideways} ${forwards} ${skip}`);
 	if(skip) return;
 	travel += sign(sideways);
 	travel &= 3;
 }
 
-function idklol(Q, A, B) {
+function gradFromTo(Q, A, B) {
 	const i=x(Q), j=y(Q), k=z(Q), l=w(Q);
 	const a=x(A)+x(B), b=y(A)+y(B), c=z(A)+z(B);
 	const e=x(B)-x(A), f=y(B)-y(A), g=z(B)-z(A);
@@ -719,10 +716,10 @@ function idklol(Q, A, B) {
 	b*g*i + c*e*j + a*f*k + e*e*l + f*f*l + g*g*l - c*f*i - a*g*j - b*e*k ];
 }
 
-function cubeRay(p, d, far) {
-	const mx=1/x(d) , my=1/y(d) , mz=1/z(d) ; // vec3 m = 1.0/rd;
-	const nx=mx*x(p), ny=my*y(p), nz=mz*z(p); // vec3 n = m*ro;
-	const kx=abs(mx), ky=abs(my), kz=abs(mz); // vec3 k = abs(m)*rad;
+function cubeRay(pos, dir, far) {
+	const mx=1/x(dir) , my=1/y(dir) , mz=1/z(dir) ;
+	const nx=mx*x(pos), ny=my*y(pos), nz=mz*z(pos);
+	const kx=abs(mx), ky=abs(my), kz=abs(mz);
 	const n = max(max(-nx-kx, -ny-ky), -nz-kz);
 	const f = min(min(-nx+kx, -ny+ky), -nz+kz);
 	return f < n ? far : n;
@@ -785,29 +782,6 @@ function recolor() {
 	, simple(bCube, simple(bBelly, bSnake, .2), .25)
 	, simple(bCube, simple(bBelly, bSnake, .4), .5)
 	];
-	
-	/*
-	const iiCube = medium([random(), pow(random(), 1.1), random()], .2);
-	const ioCube = medium([random(), pow(random(), 1.1), random()], 2.);
-	const oiCube = medium([random(), pow(random(), 1.1), random()], 2.);
-	const ooCube = medium([random(), pow(random(), 1.1), random()], .2);
-	norm(iiCube, ioCube);
-	norm(ooCube, oiCube);
-	
-	const back = [0,0,0,1,1,1];
-	const midd = iiiooiio(back, iiCube, ioCube, oiCube, ooCube, ZERO, ZERO);
-	const fron = iiiooiio(midd, iiCube, ioCube, oiCube, ooCube, ZERO, ZERO);
-	
-	const bFood = [random(), pow(random(), 1.1), random()];
-	const bSnake = [random(), pow(random(), 1.1), random()];
-	
-	cCube = [lit(midd, fron), lit(midd, fron), lit(fron, ONE)];
-	cFood = [bFood, simple(cCube[2], bFood, .5)];
-	cSnake = [bSnake
-	, simple(cCube[2], medium(bSnake, 1), .05)
-	, simple(cCube[2], medium(bSnake, 1), .5)
-	];
-	*/
 }
 recolor();
 
@@ -844,8 +818,7 @@ function cd(now) {
 	const current = fieldCenter(head);
 	const next = fieldCenter(NEXT[travel][head]);
 	const dir = nor3(mix3(current, next, (now-NEXT_MOVE)/MOVE_DELAY + 1));
-	// const diff = idklol(ROTATION, add3(dir, faceNormal(faceOf(head))), FWD);
-	const diff = idklol(ROTATION, dir, FWD);
+	const diff = gradFromTo(ROTATION, dir, FWD);
 	ROTATION = nor4(sub4(ROTATION, scale4(DT * 2, diff)));
 	
 	const rot = ROTATION;
@@ -923,7 +896,6 @@ function cd(now) {
 	}
 	
 	drawLines(BUF);
-	// drawBackground();
 	
 	glCheck();
 	requestAnimationFrame(cd);
@@ -951,8 +923,6 @@ document.addEventListener("mouseup", mtup);
 
 </script>
 <br>
-<!-- <button onclick="travel = travel+1&3;">yes</button> -->
-<!-- <button onclick="travel = travel-1&3;">no</button> -->
 </body>
 </html>
 
