@@ -1,0 +1,957 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>test three.js</title>
+<style> body { margin: 0; } </style>
+</head>
+<body style="overscroll-behavior: none;">
+<canvas id="maincanvas""
+style="position: absolute; width: 100%; height:100%;"></canvas>
+<script id="vs" type="other">
+precision mediump float;
+uniform vec2 u_scale;
+attribute vec3 i_point, i_color;
+varying vec3 v_color;
+void main() {
+	v_color = i_color;
+	gl_Position = vec4(i_point.xy * u_scale, i_point.z, 1.);
+}
+</script>
+<script id="fs" type="other">
+precision mediump float;
+varying vec3 v_color;
+void main() {
+	gl_FragColor = vec4(v_color, 1.);
+}
+</script>
+<script id="vsback" type="other">
+precision mediump float;
+uniform float u_t;
+uniform vec2 u_scale;
+uniform vec4 u_yz, u_zx, u_xy;
+attribute vec3 i_uvi, i_mix;
+varying vec3 v_color;
+void main() {
+	v_color = i_mix;
+	float phi = dot(i_uvi, vec3(2.)) + cos(u_t*.05 + i_uvi.z);
+	vec2 fef = vec2(cos(phi), sin(phi));
+	gl_Position = vec4(i_uvi.xy + fef * u_scale * .02 * i_uvi.z, .99, 1.);
+}
+</script>
+<script id="fsback" type="other">
+precision mediump float;
+varying vec3 v_color;
+void main() {
+	gl_FragColor = vec4(v_color, 1.);
+}
+</script>
+<script type="text/javascript">
+
+const print = console.log;
+const random = Math.random;
+const floor = Math.floor;
+const ceil = Math.ceil;
+const sqrt = Math.sqrt;
+const imul = Math.imul;
+const abs = Math.abs;
+const pow = Math.pow;
+const cos = Math.cos;
+const sin = Math.sin;
+const min = Math.min;
+const max = Math.max;
+
+function rr(top) {
+	return floor(random()*top);
+}
+
+function sign(f) {
+	if(f < 0) return -1;
+	if(f > 0) return 1;
+	return 0;
+}
+
+const g1 = 0.7548776662466927;
+const g2 = 0.5698402909980532;
+const g3 = sqrt(2);
+const g4 = (sqrt(5) - 1)/2;
+
+const rand = random;
+const rand_table = new Float32Array(1024);
+
+for(let i = 0; i < 1024; i++) rand_table[i] = rand();
+function badmix(s) { return imul(s, 2654435769); }
+function randf(s) { return rand_table[imul(s, 2654435769) >>> 22]; }
+function assert(condition, message) {
+	if(!condition) throw new Error(message || "Assertion failed");
+}
+
+
+
+/*/ MATHS /*/
+
+const RGT = [1, 0, 0, 0];
+const UWD = [0, 1, 0, 0];
+const FWD = [0, 0, 1, 0];
+const WON = [0, 0, 0, 1];
+const ONE = [1, 1, 1, 1];
+const ZERO = [0, 0, 0, 0];
+
+// select vector components
+function x(a) { return a.length > 0 ? a[0] : 0; }
+function y(a) { return a.length > 1 ? a[1] : 0; }
+function z(a) { return a.length > 2 ? a[2] : 0; }
+function w(a) { return a.length > 3 ? a[3] : 0; }
+function xy(a) { return [x(a), y(a)]; }
+function xyz(a) { return [x(a), y(a), z(a)]; }
+function xyz_r(a, b) { return [x(a), y(a), z(a), b]; }
+
+// vector maths
+function scale2(v,a) { return [v*x(a), v*y(a)]; }
+function scale3(v,a) { return [v*x(a), v*y(a), v*z(a)]; }
+function scale4(v,a) { return [v*x(a), v*y(a), v*z(a), v*w(a)]; }
+function neg3(a) { return [-x(a), -y(a), -z(a)]; }
+function add2(a,b) { return [x(a)+x(b), y(a)+y(b)]; }
+function add3(a,b) { return [x(a)+x(b), y(a)+y(b), z(a)+z(b)]; }
+function add4(a,b) { return [x(a)+x(b), y(a)+y(b), z(a)+z(b), w(a)+w(b)]; }
+function sub2(a,b) { return [x(a)-x(b), y(a)-y(b)]; }
+function sub3(a,b) { return [x(a)-x(b), y(a)-y(b), z(a)-z(b)]; }
+function sub4(a,b) { return [x(a)-x(b), y(a)-y(b), z(a)-z(b), w(a)-w(b)]; }
+function cross(a,b) {
+	return [y(a)*z(b)-z(a)*y(b), z(a)*x(b)-x(a)*z(b), x(a)*y(b)-y(a)*x(b)]; }
+function det2(a,b) { return x(a)*y(b) - y(a)*x(b); }
+function det3(a,b,c) { return dot3(cross(a, b), c); }
+function mix(a,b, t) { return a*(1-t) + b*t; }
+function mix2(a,b,t) { return add2(scale2(1-t, a), scale2(t, b)); }
+function mix3(a,b,t) { return add3(scale3(1-t, a), scale3(t, b)); }
+function mix4(a,b,t) { return add4(scale4(1-t, a), scale4(t, b)); }
+function dmix3(p0,p1,p2,p3, u,v) {
+	return mix3(mix3(p0, p1, u), mix3(p2, p3, u), v); }
+function dot2(a,b) { return x(a)*x(b) + y(a)*y(b); }
+function dot3(a,b) { return x(a)*x(b) + y(a)*y(b) + z(a)*z(b); }
+function dot4(a,b) { return x(a)*x(b) + y(a)*y(b) + z(a)*z(b) + w(a)*w(b); }
+function len2(v) { return sqrt(dot2(v,v)); }
+function len3(v) { return sqrt(dot3(v,v)); }
+function len4(v) { return sqrt(dot4(v,v)); }
+function nor2(v) { return scale2(1/len2(v), v); }
+function nor3(v) { return scale3(1/len3(v), v); }
+function nor4(v) { return scale4(1/len4(v), v); }
+function max3(v) { return max(x(v), max(y(v), z(v))); }
+
+// color stuff
+function div3(a,b) { return [x(a)/x(b), y(a)/y(b), z(a)/z(b)]; }
+function inv3(a) { return [1/x(a), 1/y(a), 1/z(a)]; }
+function medium(color, thickness) {
+	return inv3(add3(ONE, scale3(thickness, sub3(ONE, color))));
+}
+function iiiooiio(collum, ii, io, oi, oo, i, o) {
+	assert(collum.length >= 6);
+	const colx=collum[0], coly=collum[1], colz=collum[2];
+	const lumx=collum[3], lumy=collum[4], lumz=collum[5];
+	const iix=x(ii), iiy=y(ii), iiz=z(ii);
+	const iox=x(io), ioy=y(io), ioz=z(io);
+	const oix=x(oi), oiy=y(oi), oiz=z(oi);
+	const oox=x(oo), ooy=y(oo), ooz=z(oo);
+	const ix=x(i), iy=y(i), iz=z(i);
+	const ox=x(o), oy=y(o), oz=z(o);
+	const bx = iox/(1. - iix*colx);
+	const by = ioy/(1. - iiy*coly);
+	const bz = ioz/(1. - iiz*colz);
+	return [
+		oox + bx*colx*oix,
+		ooy + by*coly*oiy,
+		ooz + bz*colz*oiz,
+		ox + bx*(colx*ix + lumx),
+		oy + by*(coly*iy + lumy),
+		oz + bz*(colz*iz + lumz)
+	];
+}
+function simple(paint, background, p) {
+	const R=x(background), G=y(background), B=z(background);
+	const u=x(paint)*p, v=y(paint)*p, w=z(paint)*p;
+	const q = 1 - p;
+	return [u + R*q*q / (1-u*R), v + G*q*q / (1-v*G), w + B*q*q / (1-w*B)];
+}
+
+// rotate a vector2 v counter clock wise n times
+function CCW2(v, n=1) {
+	if(v&1) v = [-y(v), x(v)];
+	if(v&2) v = [-x(v), y(v)];
+	return v;
+}
+
+// conjugate q
+function qcon(q) { return [x(q), y(q), z(q), -w(q)]; }
+
+// rotate v by q
+function qrot(v, q) {
+	const c = cross(xyz(q), sub3(cross(xyz(q), v), scale3(w(q), v)));
+	return add3(v, scale3(2, c));
+}
+
+// create quaternion from axis angle
+function angax(v, phi) {
+	phi *= -.5;
+	return xyz_r(scale3(sin(phi), nor3(v)), cos(phi));
+}
+
+// quaternion multiply
+function qmul(a, b) {
+	const v = add3(add3(scale3(w(a), b), scale3(w(b), a)), cross(a, b));
+	return xyz_r(v, w(a)*w(b) + dot3(a, b));
+}
+
+// assertions / types idk
+function Int(i) { assert(floor(i) === i, i); }
+function FieldIndex(i) { Int(i); assert(0 <= i && i < FIELD.length, i); }
+function FaceIndex(i) { Int(i); assert(0 <= i && i < 6, i); }
+function Direction(i) { Int(i); assert(0 <= i && i < 4, i); }
+
+
+
+/*/ WEBGL /*/
+
+function glCheck() {
+	let err = gl.getError();
+	assert(err === 0, err);
+}
+
+function createShader(type, code) {
+	let r = gl.createShader(type);
+	gl.shaderSource(r, code);
+	gl.compileShader(r);
+	assert(gl.getShaderParameter(r,gl.COMPILE_STATUS),gl.getShaderInfoLog(r));
+	return r;
+}
+
+function createProgramFromString(inputs, vertCode, fragCode, outputs) {
+	let r = gl.createProgram();
+	Object.keys(inputs).forEach(i => gl.bindAttribLocation(r, inputs[i], i));
+	Object.keys(outputs).forEach(i => gl.bindFragDataLocation(r, outputs[i], i));
+	let vert = createShader(gl.VERTEX_SHADER, vertCode);
+	let frag = createShader(gl.FRAGMENT_SHADER, fragCode);
+	gl.attachShader(r, vert);
+	gl.attachShader(r, frag);
+	gl.linkProgram(r);
+	assert(gl.getProgramParameter(r,gl.LINK_STATUS),gl.getProgramInfoLog(r));
+	gl.detachShader(r, vert);
+	gl.detachShader(r, frag);
+	gl.deleteShader(vert);
+	gl.deleteShader(frag);
+	gl.validateProgram(r);
+	assert(gl.getProgramParameter(r,gl.VALIDATE_STATUS),gl.getProgramInfoLog(r));
+	return r;
+}
+
+function createProgram(inputs, vert, frag, outputs) {
+	const vs = document.getElementById(vert).text;
+	const fs = document.getElementById(frag).text;
+	return createProgramFromString(inputs, vs, fs, outputs);
+}
+
+const canvas = document.getElementById("maincanvas");
+const gl = canvas.getContext("webgl");
+assert(gl !== null, "shit browser");
+
+const line_prog = createProgram({i_point:0, i_color:1}, "vs", "fs", {});
+const back_prog = createProgram({i_uvi:0, i_mix:1}, "vsback", "fsback", {});
+const line_buf = gl.createBuffer();
+const back_buf = gl.createBuffer();
+
+gl.useProgram(line_prog);
+const line_u_scale = gl.getUniformLocation(line_prog, "u_scale");
+
+gl.useProgram(back_prog);
+const back_u_scale = gl.getUniformLocation(back_prog, "u_scale");
+const back_u_t = gl.getUniformLocation(back_prog, "u_t");
+
+function startFrame(W, H, time) {
+	gl.viewport(0, 0, W, H);
+	gl.enable(gl.DEPTH_TEST);
+	gl.depthFunc(gl.LEQUAL);
+	gl.clearColor(1., 1., 1., 1.);
+	gl.clear(gl.COLOR_BUFFER_BIT);
+	
+	const w = .4*min(1, H/W);
+	const h = .4*min(1, W/H);
+	
+	gl.useProgram(line_prog);
+	gl.uniform2f(line_u_scale, w, h);
+	
+	gl.useProgram(back_prog);
+	gl.uniform2f(back_u_scale, w, h);
+	gl.uniform1f(back_u_t, time);
+}
+
+function drawLines(lines) {
+	
+	gl.bindBuffer(gl.ARRAY_BUFFER, line_buf);
+	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(lines), gl.STREAM_DRAW);
+	
+	gl.useProgram(line_prog);
+	gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 6*4, 0);
+	gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 6*4, 3*4);
+	gl.enableVertexAttribArray(0);
+	gl.enableVertexAttribArray(1);
+	
+	gl.drawArrays(gl.TRIANGLE_STRIP, 0, lines.length/6);
+}
+
+const background = []; {
+	let px=0, py=0;
+	for(let i = 0; i < 100; i++) {
+		px = px+3242174889 | 0;
+		py = py+2447445414 | 0;
+		background.push(px/(1<<31), py/(1<<31), sqrt(i*3+10)+0, 1,0,0);
+		background.push(px/(1<<31), py/(1<<31), sqrt(i*3+10)+1, 0,1,0);
+		background.push(px/(1<<31), py/(1<<31), sqrt(i*3+10)+2, 0,0,1);
+	}
+	print(background);
+	gl.bindBuffer(gl.ARRAY_BUFFER, back_buf);
+	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(background), gl.STREAM_DRAW);
+}
+
+function drawBackground() {
+	gl.bindBuffer(gl.ARRAY_BUFFER, back_buf);
+	
+	gl.useProgram(back_prog);
+	gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 6*4, 0);
+	gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 6*4, 3*4);
+	gl.enableVertexAttribArray(0);
+	gl.enableVertexAttribArray(1);
+	
+	gl.drawArrays(gl.TRIANGLES, 0, background.length/6);
+}
+
+glCheck();
+
+
+
+/*/ CUBE /*/
+
+const THINGS = { NONE: 0, SNAKE: 1, EYE: 2, FOOD: 3 };
+const DIR = { RIGHT: 0, UP: 1, LEFT: 2, DOWN: 3 };
+function reverse(direction) { return direction ^ 2; }
+
+function None(i) { FieldIndex(i); FIELD[i].typ = THINGS.NONE; }
+function Food(i) { FieldIndex(i); FIELD[i].typ = THINGS.FOOD; }
+function Eye(i) { FieldIndex(i); FIELD[i].typ = THINGS.EYE; }
+function Snake(i, nxt, prv) { FieldIndex(i);
+	FIELD[i].typ = THINGS.SNAKE;
+	FIELD[i].nxt = nxt;
+	FIELD[i].prv = prv;
+}
+
+const SIZE_MULTIPLIER = 1;
+const DIM = SIZE_MULTIPLIER * 10;
+const FIELD = new Array(DIM * DIM * 6);
+const CURVE = new Array(4);
+const NEXT = new Array(4);
+for(let i = 0; i < 4; i++) {
+	CURVE[i] = new Array(DIM * DIM * 6);
+	NEXT[i] = new Array(DIM * DIM * 6);
+}
+
+let head = -1;
+let tail = -1;
+let points = 0;
+let travel = 0;
+
+function T(face, x, y) {
+	assert(0 <= face && face < 6, "face: " + face);
+	assert(0 <= x && x < DIM, "x: " + x);
+	assert(0 <= y && y < DIM, "y: " + y);
+	return face * DIM * DIM + x + y * DIM;
+}
+
+function TF(face, x, y) { return FIELD[T(face, x, y)]; }
+function faceOf(i) { FieldIndex(i); return floor(i/(DIM*DIM)); }
+function yOf(i) { FieldIndex(i); return floor(i % (DIM*DIM) / DIM); }
+function xOf(i) { FieldIndex(i); return i % DIM; }
+function isEmpty(i) { FieldIndex(i); return FIELD[i].typ === THINGS.NONE; }
+function isSnake(i) { FieldIndex(i); return FIELD[i].typ === THINGS.SNAKE; }
+function isFood(i) { FieldIndex(i); return FIELD[i].typ === THINGS.FOOD; }
+function isSlitherable(i) { FieldIndex(i); return isFood(i) || isEmpty(i); }
+
+// die seite die face entgegengesetzt ist
+function opposite(face) { FaceIndex(face); return 5 - face; }
+
+// gibt dir für 0-8 alle würfel ecken
+function cornerPos(i) { return [((i<<1)&2)-1, (i&2)-1, ((i>>1)&2)-1]; }
+
+// die normale von face
+function faceNormal(face) {
+	const op = opposite(face);
+	const v = [0,0,0];
+	v[min(op, face)] = (op < face)*2-1;
+	return v;
+}
+
+// localFace(vert, 0 oder 1 oder 2) liegt immer an vert
+function localFace(vert, face) {
+	const op = opposite(face);
+	if((vert >> min(op, face)) & 1) return op;
+	return face;
+}
+
+// localCorner(face, 0 oder 2 oder 4 oder 6) liegt immer an face
+function localCorner(face, vert) {
+	const op = opposite(face);
+	vert ^= (op < face)*3;
+	vert <<= min(op, face);
+	return (vert | vert>>3) & 7;
+}
+
+function faceTangent(face, dir) {
+	const op = opposite(face);
+	const sh = (dir&1) + min(op, face) + 1;
+	const ret = [0, 0, 0];
+	if(op < face) ret[sh%3] = (dir&2) - 1;
+	else ret[sh%3] = 1 - (dir*3&2);
+	return ret;
+}
+
+function fieldCenter(i) { FieldIndex(i);
+	const face = faceOf(i);
+	const x = xOf(i);
+	const y = yOf(i);
+	const a = cornerPos(localCorner(face, 0));
+	const b = cornerPos(localCorner(face, 2));
+	const c = cornerPos(localCorner(face, 4));
+	const d = cornerPos(localCorner(face, 6));
+	return dmix3(a, b, c, d, (x+.5)/DIM, (y+.5)/DIM);
+}
+
+function verify() {
+	
+	for(let i = 0; i < FIELD.length; i++) {
+		FieldIndex(NEXT[DIR.RIGHT][i]);
+		FieldIndex(NEXT[DIR.UP][i]);
+		FieldIndex(NEXT[DIR.LEFT][i]);
+		FieldIndex(NEXT[DIR.DOWN][i]);
+		Direction(CURVE[DIR.RIGHT][i]);
+		Direction(CURVE[DIR.UP][i]);
+		Direction(CURVE[DIR.LEFT][i]);
+		Direction(CURVE[DIR.DOWN][i]);
+	}
+	
+	for(let face = 0; face < 6; face++) {
+		const a = cornerPos(localCorner(face, 0));
+		const b = cornerPos(localCorner(face, 2));
+		const c = cornerPos(localCorner(face, 4));
+		const d = cornerPos(localCorner(face, 6));
+		assert(det3(sub3(b, a), sub3(c, a), faceNormal(face)) < 0);
+	}
+	
+	for(let face = 0; face < 6; face++)
+	for(let dir = 0; dir < 4; dir++) {
+		let idx = T(face, 1, 1);
+		let ndx = NEXT[dir][idx];
+		let offset = sub3(fieldCenter(ndx), fieldCenter(idx));
+		let tangent = faceTangent(faceOf(idx), dir);
+		let eh = cross(offset, tangent);
+		assert(dot3(offset, tangent) > 0);
+		assert(dot3(eh, eh) == 0);
+	}
+}
+
+function init() {
+	// empty grid
+	for(let i = 0; i < FIELD.length; i++)
+		FIELD[i] = {index: i, typ: THINGS.NONE};
+	
+	if(false)
+	for(let i = 0; i <= SIZE_MULTIPLIER; i++){
+		for(let j = 0; j <= SIZE_MULTIPLIER; j++){
+			Eye(T(0, 4+i, 4+j));	// face 1
+			Eye(T(1, 2+i, 6+j));	// face 2
+			Eye(T(1, 6+i, 2+j));
+			Eye(T(2, 1+i, 7+j));	// face 3
+			Eye(T(2, 4+i, 4+j));
+			Eye(T(2, 7+i, 1+j));
+			Eye(T(3, 2+i, 2+j));	// face 4
+			Eye(T(3, 2+i, 6+j));
+			Eye(T(3, 6+i, 2+j));
+			Eye(T(3, 6+i, 6+j));
+			Eye(T(4, 1+i, 1+j));	// face 5
+			Eye(T(4, 1+i, 7+j));
+			Eye(T(4, 4+i, 4+j));
+			Eye(T(4, 7+i, 1+j));
+			Eye(T(4, 7+i, 7+j));
+			Eye(T(5, 2+i, 1+j));	// face 6
+			Eye(T(5, 2+i, 4+j));
+			Eye(T(5, 2+i, 7+j));
+			Eye(T(5, 6+i, 1+j));
+			Eye(T(5, 6+i, 4+j));	
+			Eye(T(5, 6+i, 7+j));
+		}
+	}
+	
+	const start = 3;
+	
+	head = T(start,1,2);
+	tail = T(start,2,1);
+	let body = T(start,1,1);
+	travel = 0;
+	
+	Snake(head, body, -1);
+	Snake(body, tail, head);
+	Snake(tail, -1, body);
+	for(let i = 0; i < 1; i++) spawnFood();
+	
+	assert(yOf(T(5,3,4)) === 4);
+
+	// set NEXT and CURVE
+	for(let i = 0; i < FIELD.length; i++) {
+		CURVE[DIR.RIGHT][i] = DIR.RIGHT;
+		CURVE[DIR.UP][i] = DIR.UP;
+		CURVE[DIR.LEFT][i] = DIR.LEFT;
+		CURVE[DIR.DOWN][i] = DIR.DOWN;
+		NEXT[DIR.RIGHT][i] = i+1;
+		NEXT[DIR.UP][i] = i-DIM;
+		NEXT[DIR.LEFT][i] = i-1;
+		NEXT[DIR.DOWN][i] = i+DIM;
+	}
+	
+	glue(0,0, 4,1);
+	glue(0,1, 2,2);
+	glue(0,2, 1,1);
+	glue(0,3, 3,0);
+	
+	glue(5,0, 1,3);
+	glue(5,1, 2,0);
+	glue(5,2, 4,3);
+	glue(5,3, 3,2);
+	
+	glue(4,2, 3,3);
+	glue(3,1, 1,0);
+	glue(1,2, 2,1);
+	glue(2,3, 4,0);
+	
+	verify();
+}
+
+function glue(face1, direction1, face2, direction2) {
+	const c = [DIM*DIM-1, DIM-1, 0, DIM*DIM-DIM];
+	const o = [-DIM, -1, DIM, 1];
+	let s1 = T(face1, 0, 0) + c[direction1];
+	let s2 = T(face2, 0, 0) + c[direction2+1&3];
+	for(let i = 0; i < DIM; i++){
+		NEXT[direction1][s1] = s2;
+		NEXT[direction2][s2] = s1;
+		CURVE[direction1][s1] = reverse(direction2);
+		CURVE[direction2][s2] = reverse(direction1);
+		s1 += o[direction1];
+		s2 -= o[direction2];
+	}
+}
+
+function getEmpties() {
+	const empties = [];
+	for(let i = 0; i < FIELD.length; i++)
+		if(isEmpty(i)) empties.push(i);
+	return empties;
+}
+
+function nextSnakeField(idx) { FieldIndex(idx); assert(isSnake(idx));
+	return FIELD[idx].nxt;
+}
+
+function prevSnakeField(idx) { FieldIndex(idx); assert(isSnake(idx));
+	return FIELD[idx].prv;
+}
+
+function getSnake() {
+	const snake = [];
+	for(let idx = head; idx >= 0; idx = nextSnakeField(idx))
+		snake.push(idx);
+	return snake;
+}
+
+function exp(pos, dir, dist) { FieldIndex(pos); Direction(dir);
+	if(dist < 0) { dir = reverse(dir); dist = -dist; }
+	while(dist > 0) {
+		let curve = CURVE[dir][pos];
+		pos = NEXT[dir][pos];
+		dir = curve;
+		dist--;
+	}
+	return pos;
+}
+
+function spawnFood() {
+	const e = getEmpties();
+	if(e.length == 0) return;
+	Food(e[rr(e.length)]);
+}
+
+let TESTCOLORCOUNTER = 0;
+
+function move(direction) { Direction(direction);
+	let next = NEXT[direction][head];
+	let dir = CURVE[direction][head];
+	if(!isSlitherable(next)) return -1;
+	const food = isFood(next);
+	Snake(next, head, -1);
+	FIELD[head].prv = next;
+	head = next;
+	if(food) recolor();
+	if(food) spawnFood();
+	if(TESTCOLORCOUNTER < 20) {
+		TESTCOLORCOUNTER += 1
+		return dir;
+	}
+	if(food) return dir;
+	let newTail = prevSnakeField(tail);
+	None(tail);
+	tail = newTail;
+	FIELD[tail].nxt = -1;
+	return dir;
+}
+
+function noise(t, s) {
+	let l = floor(t);
+	t -= l;
+	l = l^s;
+	return randf(l)*(1-t) + randf(l+1|0)*t;
+}
+
+function fbm(t, s, n, a,b) {
+	let r = 0.;
+	for(let i = 0; i < n; i++) {
+		r *= a;
+		r += noise(t, s+i)-.5;
+		t *= b;
+		s += 1;
+	}
+	return r;
+}
+
+const BUF = [];
+let LINESEED = 0;
+let INFO = false;
+let ROTATION = [0,0,0,1];
+let NEXT_MOVE = 0;
+const MOVE_DELAY = 1/8;
+let SEED = 0;
+let TIME = 0;
+let DT = 0;
+
+function line(Z, color, p0, p1) {
+	const r = x(color);
+	const g = y(color);
+	const b = z(color);
+	let x0 = x(p0); let y0 = y(p0);
+	let x1 = x(p1); let y1 = y(p1);
+	const width = .05;
+	const length = 6. * width;
+	const noise1 = 1. * width;
+	const noise2 = .4 * width;
+	const dx = x1-x0;
+	const dy = y1-y0;
+	const l = sqrt(dx*dx + dy*dy);
+	const wx = dx * width/l;
+	const wy = dy * width/l;
+	const n = ceil(l / length);
+	const seed = LINESEED;
+	x0 -= wx;
+	y0 -= wy;
+	x1 += wx;
+	y1 += wy;
+	for(let i = 0; i <= n; i++) {
+		const t = i/n;
+		const w = 4*t*(1-t)
+		const x = x0*(1-t)+x1*t + fbm(i*2,+seed, 5, g4,g4)*noise1*w;
+		const y = y0*(1-t)+y1*t + fbm(i*2,-seed, 5, g4,g4)*noise1*w;
+		const lx = x + wy + (randf((seed*n+i)*4+0)-.5)*noise2;
+		const rx = x - wy + (randf((seed*n+i)*4+1)-.5)*noise2;
+		const ly = y - wx + (randf((seed*n+i)*4+2)-.5)*noise2;
+		const ry = y + wx + (randf((seed*n+i)*4+3)-.5)*noise2;
+		if(i === 0) BUF.push(lx,ly,Z, r,g,b);
+		if(i === 0) BUF.push(lx,ly,Z, r,g,b);
+		BUF.push(lx,ly,Z, r,g,b);
+		BUF.push(rx,ry,Z, r,g,b);
+		if(i === n) BUF.push(rx,ry,Z, r,g,b);
+	}
+}
+
+function blob(Z, color, P) {
+	const a = scale3(.01, RGT);
+	line(Z, color, add2(P, a), sub2(P, a));
+}
+
+function show(str) {
+	document.getElementById("test").innerHTML = str;
+}
+
+// projects point to screen
+function pro(v) {
+	return scale2(8/(8-z(v)), v)
+	// return v;
+}
+
+function planeSide(normal, offset) {
+	return z(normal) * 8 < offset;
+	// return z(normal) < 0;
+}
+
+function turnInput(v) {
+	const direction = pro(qrot(faceTangent(faceOf(head), travel), ROTATION));
+	const sideways = det2(v, direction);
+	const forwards = dot2(v, direction);
+	// const skip = abs(sideways)*2 < abs(forwards);
+	const skip = false;
+	// show(`${v[0]} ${v[1]} ${sideways} ${forwards} ${skip}`);
+	if(skip) return;
+	travel += sign(sideways);
+	travel &= 3;
+}
+
+function idklol(Q, A, B) {
+	const i=x(Q), j=y(Q), k=z(Q), l=w(Q);
+	const a=x(A)+x(B), b=y(A)+y(B), c=z(A)+z(B);
+	const e=x(B)-x(A), f=y(B)-y(A), g=z(B)-z(A);
+	return [
+	b*b*i + c*c*i + e*e*i + e*f*j + e*g*k + b*g*l - a*b*j - a*c*k - c*f*l,
+	e*f*i + a*a*j + c*c*j + f*f*j + f*g*k + c*e*l - a*b*i - b*c*k - a*g*l,
+	e*g*i + f*g*j + a*a*k + b*b*k + g*g*k + a*f*l - a*c*i - b*c*j - b*e*l,
+	b*g*i + c*e*j + a*f*k + e*e*l + f*f*l + g*g*l - c*f*i - a*g*j - b*e*k ];
+}
+
+function cubeRay(p, d, far) {
+	const mx=1/x(d) , my=1/y(d) , mz=1/z(d) ; // vec3 m = 1.0/rd;
+	const nx=mx*x(p), ny=my*y(p), nz=mz*z(p); // vec3 n = m*ro;
+	const kx=abs(mx), ky=abs(my), kz=abs(mz); // vec3 k = abs(m)*rad;
+	const n = max(max(-nx-kx, -ny-ky), -nz-kz);
+	const f = min(min(-nx+kx, -ny+ky), -nz+kz);
+	return f < n ? far : n;
+}
+
+
+
+/*/ COLORS /*/
+
+let cCube, cSnake, cFood;
+let zCube = new Array(3);
+let zSnake = new Array(3);
+let zFood = new Array(2);
+
+zIndex = 0;
+zFood[0] = zIndex; zIndex += .001;
+zSnake[0] = zIndex; zIndex += .001;
+zCube[0] = zIndex; zIndex += .001;
+zSnake[1] = zIndex; zIndex += .001;
+zFood[1] = zIndex; zIndex += .001;
+zCube[1] = zIndex; zIndex += .001;
+zSnake[2] = zIndex; zIndex += .001;
+zCube[2] = zIndex; zIndex += .001;
+
+function norm(a, b) {
+		const tot = add3(a, b);
+		a[0] /= tot[0];
+		a[1] /= tot[1];
+		a[2] /= tot[2];
+		b[0] /= tot[0];
+		b[1] /= tot[1];
+		b[2] /= tot[2];
+}
+
+function lit(collum, light) {
+	return [
+		collum[0]*x(light) + collum[3],
+		collum[1]*y(light) + collum[4],
+		collum[2]*z(light) + collum[5]
+	];
+}
+
+function ensureContrast(col) {
+	if(max3(col) > .8) return scale3(.5, col);
+	return col;
+}
+
+function recolor() {
+	
+	const bCube = medium([random(), pow(random(), 1.1), random()], .5);
+	const bFood = ensureContrast([random(), random(), random()]);
+	const bSnake = [random(), random(), random()];
+	const bBelly = [random(), random(), random()];
+	const transition = random();
+	
+	
+	cCube = [bCube, bCube, ONE];
+	cFood = [bFood, simple(cCube[2], bFood, .5)];
+	cSnake = [simple(bBelly, bSnake, .1)
+	, simple(bCube, simple(bBelly, bSnake, .2), .25)
+	, simple(bCube, simple(bBelly, bSnake, .4), .5)
+	];
+	
+	/*
+	const iiCube = medium([random(), pow(random(), 1.1), random()], .2);
+	const ioCube = medium([random(), pow(random(), 1.1), random()], 2.);
+	const oiCube = medium([random(), pow(random(), 1.1), random()], 2.);
+	const ooCube = medium([random(), pow(random(), 1.1), random()], .2);
+	norm(iiCube, ioCube);
+	norm(ooCube, oiCube);
+	
+	const back = [0,0,0,1,1,1];
+	const midd = iiiooiio(back, iiCube, ioCube, oiCube, ooCube, ZERO, ZERO);
+	const fron = iiiooiio(midd, iiCube, ioCube, oiCube, ooCube, ZERO, ZERO);
+	
+	const bFood = [random(), pow(random(), 1.1), random()];
+	const bSnake = [random(), pow(random(), 1.1), random()];
+	
+	cCube = [lit(midd, fron), lit(midd, fron), lit(fron, ONE)];
+	cFood = [bFood, simple(cCube[2], bFood, .5)];
+	cSnake = [bSnake
+	, simple(cCube[2], medium(bSnake, 1), .05)
+	, simple(cCube[2], medium(bSnake, 1), .5)
+	];
+	*/
+}
+recolor();
+
+
+
+/*/ LOOP /*/
+
+function cd(now) {
+	now /= 1000;
+	if(TIME !== 0) DT = now - TIME;
+	INFO = floor(now) !== floor(TIME);
+	if(floor(now*6) !== floor(TIME*6)) SEED = SEED+1&3;
+	TIME = now;
+	if(DT > .2) print("big dt", DT, "seconds"); 
+	if(DT > .1) DT = .1;
+	
+	if(now > NEXT_MOVE) {
+		NEXT_MOVE = now + MOVE_DELAY;
+		travel = move(travel);
+		if(travel < 0) {
+			init();
+			requestAnimationFrame(cd);
+			return;
+		}
+	}
+	
+	const W = gl.canvas.width;
+	const H = gl.canvas.height;
+	startFrame(W, H, TIME);
+	
+	LINESEED = SEED;
+	BUF.splice(0,BUF.length);
+	
+	const current = fieldCenter(head);
+	const next = fieldCenter(NEXT[travel][head]);
+	const dir = nor3(mix3(current, next, (now-NEXT_MOVE)/MOVE_DELAY + 1));
+	// const diff = idklol(ROTATION, add3(dir, faceNormal(faceOf(head))), FWD);
+	const diff = idklol(ROTATION, dir, FWD);
+	ROTATION = nor4(sub4(ROTATION, scale4(DT * 2, diff)));
+	
+	const rot = ROTATION;
+	const vert = Array(8);
+	const face = Array(6);
+	const viewdir = qrot(FWD, qcon(ROTATION));
+	function behind(p) { return cubeRay(p, viewdir, -100) > -.001; }
+	
+	for(let i = 0; i < 8; i++) vert[i] = qrot(cornerPos(i), rot);
+	for(let i = 0; i < 6; i++) face[i] = qrot(faceNormal(i), rot);
+	for(let i = 0; i < 8; i++) {
+		const f0 = localFace(i, 0);
+		const f1 = localFace(i, 1);
+		const f2 = localFace(i, 2);
+		const z12 = planeSide(face[f1], 1) + planeSide(face[f2], 1);
+		const z20 = planeSide(face[f2], 1) + planeSide(face[f0], 1);
+		const z01 = planeSide(face[f0], 1) + planeSide(face[f1], 1);
+		if(i&1) line(zCube[z12], cCube[z12], pro(vert[i]), pro(vert[i^1]));
+		LINESEED+=1;
+		if(i&2) line(zCube[z20], cCube[z20], pro(vert[i]), pro(vert[i^2]));
+		LINESEED+=1;
+		if(i&4) line(zCube[z01], cCube[z01], pro(vert[i]), pro(vert[i^4]));
+		LINESEED+=1;
+	}
+	
+	for(let i = 0; i < FIELD.length; i++) {
+		if(isEmpty(i)) continue;
+		if(isSnake(i)) continue;
+		const n = faceNormal(faceOf(i));
+		const p = add3(fieldCenter(i), scale3(.1, n));
+		const z1 = behind(p) + 0;
+		blob(zFood[z1], cFood[z1], pro(qrot(p, rot)));
+		LINESEED+=1;
+	}
+	
+	const idx = getSnake();
+	assert(idx.length >= 2, idx.length);
+	
+	const s = idx.map(function(i) {
+		const p = fieldCenter(i);
+		const n = faceNormal(faceOf(i));
+		return pro(qrot(add3(p, scale3(.1, n)), rot));
+	});
+	
+	const Z = idx.map(function(i) {
+		const p = fieldCenter(i);
+		const n = faceNormal(faceOf(i));
+		return behind(add3(p, scale3(.05, n)));
+	})
+	
+	let A = s[0];
+	const screen = [s[0]];
+	const zorder = []
+	for(let i = 1; i < s.length-1; i++) {
+		const B = s[i];
+		const C = s[i+1];
+		const AB = sub2(B, A);
+		const BC = sub2(C, B);
+		const mag = det2(AB, BC);
+		if((badmix(idx[i])>>>29) != 0)
+		if(Z[i-1] == Z[i] && Z[i] == Z[i+1])
+		if(abs(mag) < .001) continue;
+		zorder.push(Z[i-1] + Z[i])
+		screen.push(B);
+		A = B;
+	}
+	
+	screen.push(s[s.length-1]);
+	zorder.push(Z[Z.length-1] + Z[Z.length-2]);
+	
+	for(let i = 0; i < screen.length-1; i++) {
+		const z1 = zorder[i];
+		line(zSnake[z1], cSnake[z1], screen[i], screen[i+1]);
+		LINESEED+=1;
+	}
+	
+	drawLines(BUF);
+	// drawBackground();
+	
+	glCheck();
+	requestAnimationFrame(cd);
+	canvas.width = canvas.offsetWidth;
+	canvas.height = canvas.offsetHeight;
+}
+
+init();
+requestAnimationFrame(cd);
+
+
+
+/*/ MOUSE CONTROL /*/
+
+let mx = 0, my = 0;
+function mtdown(event) { mx = event.pageX; my = event.pageY; }
+function mtup(event) {
+	let dx = mx - event.pageX;
+	let dy = my - event.pageY;
+	turnInput([dx, -dy]);
+}
+
+document.addEventListener("mousedown", mtdown);
+document.addEventListener("mouseup", mtup);
+
+</script>
+<br>
+<!-- <button onclick="travel = travel+1&3;">yes</button> -->
+<!-- <button onclick="travel = travel-1&3;">no</button> -->
+</body>
+</html>
+
