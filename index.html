@@ -273,8 +273,8 @@ function startFrame(W, H, time) {
 	gl.clearColor(1., 1., 1., 1.);
 	gl.clear(gl.COLOR_BUFFER_BIT);
 	
-	const w = .4*min(1, H/W);
-	const h = .4*min(1, W/H);
+	const w = .55*min(1, H/W);
+	const h = .55*min(1, W/H);
 	
 	gl.useProgram(line_prog);
 	gl.uniform2f(line_u_scale, w, h);
@@ -911,15 +911,39 @@ requestAnimationFrame(cd);
 /*/ MOUSE CONTROL /*/
 
 let mx = 0, my = 0;
-function mtdown(event) { mx = event.pageX; my = event.pageY; }
-function mtup(event) {
-	let dx = mx - event.pageX;
-	let dy = my - event.pageY;
-	turnInput([dx, -dy]);
-}
 
-document.addEventListener("mousedown", mtdown);
-document.addEventListener("mouseup", mtup);
+document.addEventListener("mousedown", function(event) {
+	mx = event.pageX;
+	my = event.pageY;
+});
+
+document.addEventListener("mouseup", function(event) {
+	turnInput([mx - event.pageX, event.pageY - my]);
+});
+
+
+
+
+/*/ TOUCH CONTROL /*/
+
+let tx = 0, ty = 0;
+
+document.addEventListener("touchstart", function(event) {
+	event.preventDefault();
+	if(event.touches.length == 1) {
+		tx = event.touches[0].pageX;
+		ty = event.touches[0].pageY;
+	}
+}, {passive: false});
+
+document.addEventListener("touchend", function(event) {
+	event.preventDefault();
+	if(event.touches.length == 0) {
+		let dx = tx - event.changedTouches[0].pageX;
+		let dy = ty - event.changedTouches[0].pageY;
+		turnInput([dx, -dy]);
+	}
+}, {passive: false});
 
 </script>
 </body>
