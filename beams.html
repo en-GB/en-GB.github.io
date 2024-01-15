@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta http-equiv='Content-Security-Policy' content="script-src 'self' 'unsafe-inline';">
+<title>beams</title>
+<style>
+
+* {
+	box-sizing: border-box;
+}
+
+body {
+	margin: 0;
+}
+
+canvas {
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 100%;
+	position: absolute;
+}
+
+</style>
+</head>
+<body>
+<script type="text/javascript">
+
+(() => {'use strict';
+
+
+const u8_to_str = u8 => String.fromCodePoint(u8 + 78589);
+const str_to_u8 = str => str.codePointAt(0) - 78589 >>> 0;
+const encode_invite = buf => Array.from(buf).map(u8_to_str).join('');
+const decode_invite = str => {
+	const v = [...str].map(str_to_u8);
+	if(v.some(e => e >= 256)) throw 'invalid characters';
+	return new Uint8Array(v);
+};
+
+
+const checked = (c, ...m) => {
+	if(c) throw m;
+};
+
+
+const assert = (c, ...m) => {
+	if(!c) throw m;
+};
+
+
+
+
+const PI = Math.PI;
+const abs = Math.abs;
+const cos = Math.cos;
+const sin = Math.sin;
+const max = Math.max;
+const min = Math.min;
+const sqrt = Math.sqrt;
+const sign = Math.sign;
+const imul = Math.imul;
+const floor = Math.floor;
+const round = Math.round;
+const ulog2 = x => 31 ^ Math.clz32(x);
+const norm2 = x => 31 ^ Math.clz32(x & -x);
+
+const print = console.log;
+const parnt = n => print((n>>>0).toString(2).padStart(100));
+
+const rf = Math.random;
+const rr = n => rf() * n | 0;
+
+
+const alloc = size => new DataView(new ArrayBuffer(size));
+
+const realloc = (view, size) => {
+	if(view.byteLength >= size) return view;
+	const buf = alloc(max(size, view.byteLength * 2));
+	print('realloc', size);
+	for(let i = 0; i < view.byteLength; i += 4)
+		buf.setInt32(i, view.getInt32(i));
+	return buf;
+	// return new DataView(view.buffer.transfer(size * 2));
+};
+
+const is_uuid = uuid => {
+	return (
+	/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+	).test(uuid);
+};
+
+
+const consume = async stream => {
+	const reader = stream.getReader();
+	let result = [];
+	try {
+		for(;;) {
+			const {done, value} = await reader.read();
+			if(done) break;
+			result.push(value);
+		}
+	} finally {
+		reader.releaseLock();
+	}
+	return result;
+};
+
+
+const deflate = async (...data) => {
+	const raw = new Blob(data).stream();
+	const compressed = raw.pipeThrough(new CompressionStream('deflate-raw'));
+	return await new Blob(await consume(compressed)).arrayBuffer();
+};
+
+
+const inflate = async (...data) => {
+	const compressed = new Blob(data).stream();
+	const raw = compressed.pipeThrough(new DecompressionStream('deflate-raw'));
+	return new Blob(await consume(raw));
+};
+
+
+const net_encode = thing =>
+	deflate(JSON.stringify(thing)).then(e => new Uint8Array(e));
+
+
+const net_decode = buffer =>
+	inflate(buffer).then(e => e.text()).then(JSON.parse);
+
+
+const copy_encode = thing => net_encode(thing).then(encode_invite);
+const copy_decode = string => net_decode(decode_invite(string));
+
+
+const frame = () => new Promise(resolve => requestAnimationFrame(resolve));
+const timeout = ms => new Promise(resolve => setTimeout(resolve, ms));
+const event = (thing, name) => new Promise(resolve =>
+	thing.addEventListener(name, resolve, {once: true}));
+
+
+const Node = (parent, type, classes, html) => {
+	const node = document.createElement(type);
+	if(classes) {
+		if(typeof classes === 'string')
+			node.className = classes;
+		else
+			Object.entries(classes).forEach(([i, e]) => node.setAttribute(i, e));
+	}
+	if(html) node.innerHTML = html;
+	parent.appendChild(node);
+	return node;
+};
+
+
+const Paragraph = (parent, txt, classes) => {
+	const node = document.createElement('p');
+	if(classes) node.className = classes;
+	if(txt) node.textContent = txt;
+	parent.appendChild(node);
+	return node;
+};
+
+
+
+
+
+const canvas = Node(document.body, 'canvas');
+const ctx = canvas.getContext('2d');
+
+(window.onresize = () => {
+	canvas.width = window.innerWidth * window.devicePixelRatio;
+	canvas.height = window.innerHeight * window.devicePixelRatio;
+  ctx.setTransform(window.devicePixelRatio, 0, 0, window.devicePixelRatio, 0, 0);
+})();
+
+const div = Node(document.body, 'div');
+const bob = Node(div, 'textarea', 'invite');
+const lock = Node(div, 'input', {type: 'checkbox'});
+
+div.style = 'position: absolute';
+
+const bf = () => (rf() - rf()) * .5;
+
+const line = (x0, y0, x1, y1) => {
+	ctx.beginPath();
+	ctx.moveTo(x0 + bf(), y0 + bf());
+	ctx.lineTo(x1 + bf(), y1 + bf());
+	ctx.stroke();
+};
+
+const circle = (x, y, r) => {
+	ctx.beginPath();
+	ctx.arc(x + bf(), y + bf(), r, 0, 2 * PI);
+	ctx.fill();
+};
+
+const cross = (x0, y0, z0, x1, y1, z1) =>
+	[y0*z1 - y1*z0, z0*x1 - z1*x0, x0*y1 - x1*y0];
+
+const subdet = (x0, y0, z0, x1, y1, z1) => x0*y1 - x1*y0;
+const dot = (x0, y0, z0, x1, y1, z1) => x0*x1 + y0*y1 + z0*z1;
+const sub = (x0, y0, z0, x1, y1, z1) => [x0 - x1, y0 - y1, z0 - z1];
+const neg = (x, y, z) => [-x, -y, -z];
+
+const nor2i = (x, y, m) => {
+	const s = m / sqrt(x*x + y*y);
+	return [0|x*s, 0|y*s];
+};
+
+const speed = 64;
+let emitters = [];
+let line_count = 0;
+let line_view = alloc(1 << 12);
+
+const set_line = (i, lx, ly, lz, qx, qy, qz) => {
+	assert((lx << 16 >> 16) == lx, 'lx', lx)
+	assert((ly << 16 >> 16) == ly, 'ly', ly)
+	assert((qx << 16 >> 16) == qx, 'qx', qx)
+	assert((qy << 16 >> 16) == qy, 'qy', qy)
+	line_view.setInt16(i*24, lx);
+	line_view.setInt16(i*24 + 2, ly);
+	line_view.setInt16(i*24 + 4, qx);
+	line_view.setInt16(i*24 + 6, qy);
+	line_view.setFloat64(i*24 + 8, lz);
+	line_view.setFloat64(i*24 + 16, qz);
+};
+
+const add_line = (lx, ly, lz, qx, qy, qz) => {
+	const i = line_count++;
+	line_view = realloc(line_view, line_count*24);
+	set_line(i, lx, ly, lz, qx, qy, qz);
+	return i;
+};
+
+const line_L = i => [
+	line_view.getInt16(i*24),
+	line_view.getInt16(i*24 + 2),
+	line_view.getFloat64(i*24 + 8)];
+
+const line_Q = i => [
+	line_view.getInt16(i*24 + 4),
+	line_view.getInt16(i*24 + 6),
+	line_view.getFloat64(i*24 + 16)];
+
+bob.onclick = async e => {
+	if(bob.value === '') {
+		const lines = [];
+		for(let i = 0; i < line_count; i++)
+			lines.push([line_L(i), line_Q(i)]);
+		bob.value = await copy_encode([emitters, lines]);
+	}
+	bob.select();
+};
+
+bob.oninput = async e => {
+	const [em, ln] = await copy_decode(bob.value.trim());
+	assert(Array.isArray(em));
+	assert(Array.isArray(ln));
+	emitters = em;
+	for(const [l, q] of ln)
+		add_line(...l, ...q);
+	bob.value = '';
+};
+
+window.onkeydown = e => {
+	if(emitters.length === 0) return;
+	if(e.keyCode == 90)
+		emitters.pop();
+	if(e.keyCode == 81)
+		emitters[emitters.length - 1].x -= 1;
+	if(e.keyCode == 87)
+		emitters[emitters.length - 1].x += 1;
+};
+
+canvas.onmousedown = async a => {
+	const b = await event(window, 'click');
+	const x = a.clientX;
+	const y = a.clientY;
+	const dx = b.clientX - x;
+	const dy = b.clientY - y;
+	if(dx === 0 && dy === 0) return;
+	const s = speed / sqrt(dx*dx + dy*dy);
+	emitters.push({x:0|x, y:0|y, dx:0|dx*s, dy:0|dy*s});
+};
+
+const M = () => {
+	ctx.clearRect(0, 0, canvas.width, canvas.height);
+	
+	for(const {x, y, dx, dy} of emitters) {
+		add_line(-dy, dx, x*dy - y*dx, dx, dy, -x*dx - y*dy);
+		circle(x, y, 2);
+	}
+	
+	const pairs = Array(line_count);
+	const bound = Array(line_count*3);
+	
+	for(let i = line_count; i-- > 0; ) {
+		const [qx_i, qy_i, qz_i] = line_Q(i);
+		const L = line_L(i);
+		let px_i = qx_i;
+		let py_i = qy_i;
+		let pz_i = qz_i;
+		let pair = i;
+		pz_i += L[0]*py_i - L[1]*px_i;
+		for(let j = line_count; --j > i; ) {
+			const px_j = bound[j*3+0];
+			const py_j = bound[j*3+1];
+			const pz_j = bound[j*3+2];
+			let [lx_i, ly_i, lz_i] = L;
+			let [lx_j, ly_j, lz_j] = line_L(j);
+			const [qx_j, qy_j, qz_j] = line_Q(j);
+			let x = ly_i*lz_j - ly_j*lz_i;
+			let y = lz_i*lx_j - lz_j*lx_i;
+			let z = lx_i*ly_j - lx_j*ly_i;
+			if(z < 0) {
+				lx_i = -lx_i;
+				ly_i = -ly_i;
+				lz_i = -lz_i;
+				x = -x;
+				y = -y;
+				z = -z;
+			} else {
+				lx_j = -lx_j;
+				ly_j = -ly_j;
+				lz_j = -lz_j;
+			}
+			if(qx_i*x + qy_i*y + qz_i*z > 0
+			&& qx_j*x + qy_j*y + qz_j*z > 0
+			&& px_i*x + py_i*y + pz_i*z <= 0
+			&& px_j*x + py_j*y + pz_j*z <= 0
+			) {
+				px_i = lx_j;
+				py_i = ly_j;
+				pz_i = lz_j;
+				bound[j*3+0] = lx_i;
+				bound[j*3+1] = ly_i;
+				bound[j*3+2] = lz_i;
+				pairs[j] = i;
+				pair = j;
+			}
+		}
+		bound[i*3+0] = px_i;
+		bound[i*3+1] = py_i;
+		bound[i*3+2] = pz_i;
+		pairs[i] = pair;
+	}
+	
+	let len = 0
+	for(let i = 0; i < line_count; i++) {
+		let L = line_L(i);
+		const Q = line_Q(i);
+		let P = bound.slice(i*3, i*3+3);
+		let j = pairs[i];
+		if(pairs[j] !== i) j = i;
+		const p0 = cross(...L, ...Q);
+		const p1 = cross(...L, ...P);
+		assert(p0[2] < 0, 'p0[2]', p0, L, Q, P);
+		assert(p1[2] < 0, 'p1[2]', p1, L, Q, P);
+		assert(dot(...p0, ...P) > 0, 'negative line length');
+		const x0 = p0[0] / p0[2], y0 = p0[1] / p0[2];
+		const x1 = p1[0] / p1[2], y1 = p1[1] / p1[2];
+		line(x0, y0, x1, y1);
+		if(x0 < 0 || x0 >= window.innerWidth
+		|| y0 < 0 || y0 >= window.innerHeight) continue;
+		if(i > j) continue;
+		if(i < j) {
+			const f = 4;
+			const x = 0|x1*f;
+			const y = 0|y1*f;
+			const L_j = line_L(j);
+			const P_j = bound.slice(j*3, j*3+3);
+			const [vx, vy] = nor2i(L[0] + L_j[0], L[1] + L_j[1], speed/f);
+			const lx = vx * f;
+			const ly = vy * f;
+			const lz = -vx*x - vy*y;
+			const H = cross(lx, ly, lz, ...P);
+			const p = dot(...H, ...P_j) < 0 ? P : P_j;
+			if(subdet(lx, ly, lz, ...p) < 0) {
+				L = [lx, ly, lz];
+				P = p;
+			}
+		}
+		set_line(len++, ...L, ...P);
+	}
+	line_count = len;
+	
+	if(lock.checked)
+		setTimeout(M, 1000/24);
+	else
+		requestAnimationFrame(M);
+};
+
+
+return M();
+
+})();
+
+</script>
+</body>
+</html>
+
