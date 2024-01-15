@@ -245,22 +245,13 @@ const line_Q = i => [
 	line_view.getFloat64(i*24 + 16)];
 
 bob.onclick = async e => {
-	if(bob.value === '') {
-		const lines = [];
-		for(let i = 0; i < line_count; i++)
-			lines.push([line_L(i), line_Q(i)]);
-		bob.value = await copy_encode([emitters, lines]);
-	}
+	bob.value = await copy_encode(emitters);
 	bob.select();
 };
 
 bob.oninput = async e => {
-	const [em, ln] = await copy_decode(bob.value.trim());
-	assert(Array.isArray(em));
-	assert(Array.isArray(ln));
-	emitters = em;
-	for(const [l, q] of ln)
-		add_line(...l, ...q);
+	emitters = await copy_decode(bob.value.trim());
+	line_count = 0;
 	bob.value = '';
 };
 
