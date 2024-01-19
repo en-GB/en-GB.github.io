@@ -167,7 +167,7 @@ const Paragraph = (parent, txt, classes) => {
 
 
 const canvas = Node(document.body, 'canvas');
-const ctx = canvas.getContext('2d');
+const ctx = canvas.getContext('2d', {alpha: false});
 
 (window.onresize = () => {
 	canvas.width = window.innerWidth * window.devicePixelRatio;
@@ -181,7 +181,7 @@ const lock = Node(div, 'input', {type: 'checkbox'});
 
 div.style = 'position: absolute';
 
-const bf = () => (rf() - rf()) * .5 / window.devicePixelRatio;
+const bf = () => (rf() - rf()) * .75 / window.devicePixelRatio;
 
 const line = (x0, y0, x1, y1) => {
 	ctx.beginPath();
@@ -299,7 +299,10 @@ document.addEventListener("touchend", event => {
 }, {passive: false});
 
 const M = () => {
+	ctx.fillStyle = 'black';
 	ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+	ctx.fillStyle = 'white';
+	ctx.strokeStyle = 'white';
 	
 	for(const {x, y, dx, dy} of emitters) {
 		add_line(-dy, dx, x*dy - y*dx, dx, dy, -x*dx - y*dy);
