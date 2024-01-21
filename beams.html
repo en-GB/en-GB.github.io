@@ -350,10 +350,10 @@ const M = () => {
 			let f_qj = qx_j*x + qy_j*y + qz_j*z;
 			let f_pi = px_i*x + py_i*y + pz_i*z;
 			let f_pj = px_j*x + py_j*y + pz_j*z;
-			if(abs(f_qi) < (1 << 31)) f_qi = imul(qx_i, x) + imul(qy_i, y) + imul(qz_i, z) >> 0;
-			if(abs(f_qj) < (1 << 31)) f_qj = imul(qx_j, X) + imul(qy_j, Y) + imul(qz_j, z) >> 0;
-			if(abs(f_pi) < (1 << 31)) f_pi = imul(px_i, x) + imul(py_i, y) + imul(pz_i, z) >> 0;
-			if(abs(f_pj) < (1 << 31)) f_pj = imul(px_j, X) + imul(py_j, Y) + imul(pz_j, z) >> 0;
+			if(abs(f_qi) < (1 << 30)) f_qi = imul(qx_i, x) + imul(qy_i, y) + imul(qz_i, z) >> 0;
+			if(abs(f_qj) < (1 << 30)) f_qj = imul(qx_j, X) + imul(qy_j, Y) + imul(qz_j, z) >> 0;
+			if(abs(f_pi) < (1 << 30)) f_pi = imul(px_i, x) + imul(py_i, y) + imul(pz_i, z) >> 0;
+			if(abs(f_pj) < (1 << 30)) f_pj = imul(px_j, X) + imul(py_j, Y) + imul(pz_j, z) >> 0;
 			if(f_qi < 0 && f_qj < 0 && f_pi >= 0 && f_pj >= 0) {
 				px_i = lx_j;
 				py_i = ly_j;
